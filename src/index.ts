@@ -1,6 +1,10 @@
 import { ClientError, GraphQLError, Headers as HttpHeaders, Options, Variables } from './types'
 export { ClientError } from './types'
-// import 'cross-fetch/polyfill'
+
+// TODO create correct typings for cloudflare caches.
+// @ts-ignore
+// tslint:disable-next-line
+const cache = caches.default
 
 export class GraphQLClient {
   private url: string
@@ -14,7 +18,33 @@ export class GraphQLClient {
   async rawRequest<T extends any>(
     query: string,
     variables?: Variables,
+    event?: FetchEvent,
+    options: {
+      cache: boolean;
+      cacheKey?: string;
+      cacheTtl?: number;
+    } = {
+      cache: false,
+    },
   ): Promise<{ data?: T, extensions?: any, headers: Headers, status: number, errors?: GraphQLError[] }> {
+    if (options.cache && !event) {
+      throw new Error(
+        'GraphQLClient request: cache is set true but the event is undefined.',
+      )
+    }
+
+    if (options.cache && !options.cacheKey) {
+      throw new Error(
+        'GraphQLClient request: cache is set true but no cacheKey is specified.',
+      )
+    }
+
+    if (options.cache && !options.cacheTtl) {
+      throw new Error(
+        'GraphQLClient request: cache is set true but no cacheTtl is specified.',
+      )
+    }
+
     const { headers, ...others } = this.options
 
     const body = JSON.stringify({
@@ -22,12 +52,19 @@ export class GraphQLClient {
       variables: variables ? variables : undefined,
     })
 
-    const response = await fetch(this.url, {
-      method: 'POST',
-      headers: Object.assign({ 'Content-Type': 'application/json' }, headers),
-      body,
-      ...others,
-    })
+    let response = cache.match(options.cacheKey)
+
+    if (!response) {
+      response = await fetch(this.url, {
+        method: 'POST',
+        headers: Object.assign({ 'Content-Type': 'application/json' }, headers),
+        body,
+        ...others,
+      })
+      response = new Response(response.body, response)
+      response.headers.append('Cache-Control', `max-age=${options.cacheTtl}`)
+      event!.waitUntil(cache.put(options.cacheKey, response.clone()))
+    }
 
     const result = await getResult(response)
 
@@ -48,32 +85,10 @@ export class GraphQLClient {
     query: string,
     variables?: Variables,
   ): Promise<T> {
-    const { headers, ...others } = this.options
+    const { data } = await this.rawRequest<T>(query, variables)
 
-    const body = JSON.stringify({
-      query,
-      variables: variables ? variables : undefined,
-    })
-
-    const response = await fetch(this.url, {
-      method: 'POST',
-      headers: Object.assign({ 'Content-Type': 'application/json' }, headers),
-      body,
-      ...others,
-    })
-
-    const result = await getResult(response)
-
-    if (response.ok && !result.errors && result.data) {
-      return result.data
-    } else {
-      const errorResult =
-        typeof result === 'string' ? { error: result } : result
-      throw new ClientError(
-        { ...errorResult, status: response.status },
-        { query, variables },
-      )
-    }
+    // we cast data to T here as it will be defined. otherwise there would be an error thrown already in the raw request
+    return data as T
   }
 
   setHeaders(headers: HttpHeaders): GraphQLClient {
