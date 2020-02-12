@@ -1,6 +1,6 @@
 {
   "name": "@ninetailed/cf-worker-graphql-request",
-  "version": "0.0.0-semantic-release",
+  "version": "1.0.0",
   "main": "dist/src/index.js",
   "typings": "./dist/src/index.d.ts",
   "files": [
