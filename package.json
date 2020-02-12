@@ -1,5 +1,5 @@
 {
-  "name": "graphql-request",
+  "name": "@ninetailed/cf-worker-graphql-request",
   "version": "0.0.0-semantic-release",
   "main": "dist/src/index.js",
   "typings": "./dist/src/index.d.ts",
@@ -17,13 +17,16 @@
     "url": "git+https://github.com/prisma/graphql-request.git"
   },
   "keywords": [
+    "cf",
+    "cloudflare",
+    "cloudflare-worker",
     "graphql",
     "request",
     "fetch",
     "graphql-client",
     "apollo"
   ],
-  "author": "Johannes Schickling <johannes@graph.cool>",
+  "author": "Alexander Braunreuther <alex@ninetailed.io>, Johannes Schickling <johannes@graph.cool>",
   "license": "MIT",
   "bugs": {
     "url": "https://github.com/prisma/graphql-request/issues"
