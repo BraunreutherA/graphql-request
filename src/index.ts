@@ -52,18 +52,29 @@ export class GraphQLClient {
       variables: variables ? variables : undefined,
     })
 
-    let response = cache.match(options.cacheKey)
+    let response: Response | null = null
 
-    if (!response) {
+    if (options.cache) {
+      response = await cache.match(options.cacheKey)
+
+      if (!response) {
+        response = await fetch(this.url, {
+          method: 'POST',
+          headers: Object.assign({ 'Content-Type': 'application/json' }, headers),
+          body,
+          ...others,
+        })
+        response = new Response(response.body, response)
+        response.headers.append('Cache-Control', `max-age=${options.cacheTtl}`)
+        event!.waitUntil(cache.put(options.cacheKey, response.clone()))
+      }
+    } else {
       response = await fetch(this.url, {
         method: 'POST',
         headers: Object.assign({ 'Content-Type': 'application/json' }, headers),
         body,
         ...others,
       })
-      response = new Response(response.body, response)
-      response.headers.append('Cache-Control', `max-age=${options.cacheTtl}`)
-      event!.waitUntil(cache.put(options.cacheKey, response.clone()))
     }
 
     const result = await getResult(response)
@@ -84,8 +95,16 @@ export class GraphQLClient {
   async request<T extends any>(
     query: string,
     variables?: Variables,
+    event?: FetchEvent,
+    options: {
+      cache: boolean;
+      cacheKey?: string;
+      cacheTtl?: number;
+    } = {
+      cache: false,
+    },
   ): Promise<T> {
-    const { data } = await this.rawRequest<T>(query, variables)
+    const { data } = await this.rawRequest<T>(query, variables, event, options)
 
     // we cast data to T here as it will be defined. otherwise there would be an error thrown already in the raw request
     return data as T
